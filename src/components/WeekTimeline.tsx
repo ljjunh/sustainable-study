@@ -6,7 +6,6 @@ import {
   createWeekDays,
   getEventsForDate,
   getTasksForDate,
-  todayIso,
 } from "@/src/planner";
 import type { CSSProperties, PointerEvent as ReactPointerEvent } from "react";
 import type {
@@ -31,6 +30,7 @@ const hours = Array.from(
 
 interface WeekTimelineProps {
   selectedDate: string;
+  today: string;
   tasks: Task[];
   events: ScheduleEvent[];
   onSelectDate(date: string): void;
@@ -51,13 +51,14 @@ interface DragState {
 
 export function WeekTimeline({
   selectedDate,
+  today,
   tasks,
   events,
   onSelectDate,
   onAddEvent,
   onUpdateEvent,
 }: WeekTimelineProps) {
-  const days = createWeekDays(selectedDate, todayIso());
+  const days = createWeekDays(selectedDate, today);
   const [editor, setEditor] = useState<EditorState | null>(null);
   const [drag, setDrag] = useState<DragState | null>(null);
 

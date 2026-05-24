@@ -2,12 +2,9 @@
 
 import { FormEvent, useMemo, useState } from "react";
 import { Modal } from "@/src/components/Modal";
-import {
-  formatDate,
-  getTasksForDate,
-  nowLocalDateTime,
-} from "@/src/planner";
+import { formatDate, getTasksForDate } from "@/src/planner";
 import { validateTaskDraft } from "@/src/planner-invariants";
+import { systemClock } from "@/src/planner-clock";
 import type { Priority, Task, TaskDraft } from "@/src/planner";
 
 type TaskFilter = "selected" | "open" | "done" | "all";
@@ -246,7 +243,7 @@ export function TaskPanel({
                 min={
                   modalMode === "edit" && reminderAt
                     ? reminderAt
-                    : nowLocalDateTime()
+                    : systemClock.nowLocalDateTime()
                 }
                 value={reminderAt}
                 onChange={(event) => setReminderAt(event.target.value)}

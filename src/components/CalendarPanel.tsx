@@ -4,7 +4,6 @@ import {
   createMonthGrid,
   getEventsForDate,
   getTasksForDate,
-  todayIso,
 } from "@/src/planner";
 import type {
   EventCategory,
@@ -18,6 +17,7 @@ const weekdays = ["일", "월", "화", "수", "목", "금", "토"];
 interface CalendarPanelProps {
   visibleMonth: string;
   selectedDate: string;
+  today: string;
   tasks: Task[];
   events: ScheduleEvent[];
   onSelectDate(date: string): void;
@@ -26,11 +26,12 @@ interface CalendarPanelProps {
 export function CalendarPanel({
   visibleMonth,
   selectedDate,
+  today,
   tasks,
   events,
   onSelectDate,
 }: CalendarPanelProps) {
-  const monthGrid = createMonthGrid(visibleMonth, todayIso());
+  const monthGrid = createMonthGrid(visibleMonth, today);
 
   return (
     <section className="calendar-board">

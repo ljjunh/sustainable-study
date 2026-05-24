@@ -4,6 +4,12 @@ export type Priority = "low" | "medium" | "high";
 export type EventCategory = "work" | "personal" | "study" | "health";
 export type NotificationStatus = "scheduled" | "ready" | "read";
 
+export interface Clock {
+  now(): Date;
+  todayIso(): IsoDate;
+  nowLocalDateTime(): LocalDateTime;
+}
+
 export interface Task {
   id: string;
   title: string;
@@ -103,14 +109,6 @@ export function toLocalDateTime(date: Date): LocalDateTime {
   const hour = String(date.getHours()).padStart(2, "0");
   const minute = String(date.getMinutes()).padStart(2, "0");
   return `${isoDate}T${hour}:${minute}`;
-}
-
-export function todayIso(): IsoDate {
-  return toIsoDate(new Date());
-}
-
-export function nowLocalDateTime(): LocalDateTime {
-  return toLocalDateTime(new Date());
 }
 
 export function parseIsoDate(value: IsoDate): Date {
@@ -240,11 +238,11 @@ export function getEventsForDate(
     );
 }
 
-export function createInitialState(): PlannerState {
-  const today = todayIso();
+export function createInitialState(clock: Clock): PlannerState {
+  const today = clock.todayIso();
   const tomorrow = addDays(today, 1);
   const nextWeek = addDays(today, 7);
-  const createdAt = nowLocalDateTime();
+  const createdAt = clock.nowLocalDateTime();
 
   const tasks: Task[] = [
     {
@@ -302,8 +300,8 @@ export function createInitialState(): PlannerState {
     tasks,
     events,
     notifications: [
-      ...tasks.map(createTaskNotification),
-      ...events.map(createEventNotification),
+      ...tasks.map((task) => createTaskNotification(task, clock)),
+      ...events.map((event) => createEventNotification(event, clock)),
     ].filter(
       (notification): notification is PlannerNotification =>
         notification !== null
@@ -313,8 +311,11 @@ export function createInitialState(): PlannerState {
   };
 }
 
-export function createTaskFromDraft(draft: TaskDraft): Task {
-  const timestamp = nowLocalDateTime();
+export function createTaskFromDraft(
+  draft: TaskDraft,
+  clock: Clock
+): Task {
+  const timestamp = clock.nowLocalDateTime();
   return {
     id: createId("task"),
     title: draft.title.trim(),
@@ -328,8 +329,11 @@ export function createTaskFromDraft(draft: TaskDraft): Task {
   };
 }
 
-export function createEventFromDraft(draft: EventDraft): ScheduleEvent {
-  const timestamp = nowLocalDateTime();
+export function createEventFromDraft(
+  draft: EventDraft,
+  clock: Clock
+): ScheduleEvent {
+  const timestamp = clock.nowLocalDateTime();
   return {
     id: createId("event"),
     title: draft.title.trim(),
@@ -344,7 +348,11 @@ export function createEventFromDraft(draft: EventDraft): ScheduleEvent {
   };
 }
 
-export function updateTaskFromDraft(task: Task, draft: TaskDraft): Task {
+export function updateTaskFromDraft(
+  task: Task,
+  draft: TaskDraft,
+  clock: Clock
+): Task {
   return {
     ...task,
     title: draft.title.trim(),
@@ -352,13 +360,14 @@ export function updateTaskFromDraft(task: Task, draft: TaskDraft): Task {
     priority: draft.priority,
     note: draft.note.trim(),
     reminderAt: draft.reminderAt,
-    updatedAt: nowLocalDateTime(),
+    updatedAt: clock.nowLocalDateTime(),
   };
 }
 
 export function updateEventFromDraft(
   event: ScheduleEvent,
-  draft: EventDraft
+  draft: EventDraft,
+  clock: Clock
 ): ScheduleEvent {
   return {
     ...event,
@@ -369,14 +378,18 @@ export function updateEventFromDraft(
     category: draft.category,
     note: draft.note.trim(),
     reminderAt: draft.reminderAt,
-    updatedAt: nowLocalDateTime(),
+    updatedAt: clock.nowLocalDateTime(),
   };
 }
 
-export function createTaskNotification(task: Task): PlannerNotification | null {
+export function createTaskNotification(
+  task: Task,
+  clock: Clock
+): PlannerNotification | null {
   if (!task.reminderAt) {
     return null;
   }
+  const now = clock.nowLocalDateTime();
 
   return {
     id: createId("notice"),
@@ -385,20 +398,19 @@ export function createTaskNotification(task: Task): PlannerNotification | null {
     title: task.title,
     body: `${task.dueDate}까지 완료`,
     notifyAt: task.reminderAt,
-    status:
-      compareDateTime(task.reminderAt, nowLocalDateTime()) <= 0
-        ? "ready"
-        : "scheduled",
-    createdAt: nowLocalDateTime(),
+    status: compareDateTime(task.reminderAt, now) <= 0 ? "ready" : "scheduled",
+    createdAt: now,
   };
 }
 
 export function createEventNotification(
-  event: ScheduleEvent
+  event: ScheduleEvent,
+  clock: Clock
 ): PlannerNotification | null {
   if (!event.reminderAt) {
     return null;
   }
+  const now = clock.nowLocalDateTime();
 
   return {
     id: createId("notice"),
@@ -407,18 +419,16 @@ export function createEventNotification(
     title: event.title,
     body: `${event.date} ${event.startTime}-${event.endTime}`,
     notifyAt: event.reminderAt,
-    status:
-      compareDateTime(event.reminderAt, nowLocalDateTime()) <= 0
-        ? "ready"
-        : "scheduled",
-    createdAt: nowLocalDateTime(),
+    status: compareDateTime(event.reminderAt, now) <= 0 ? "ready" : "scheduled",
+    createdAt: now,
   };
 }
 
 export function refreshNotificationStatuses(
-  notifications: PlannerNotification[]
+  notifications: PlannerNotification[],
+  clock: Clock
 ): PlannerNotification[] {
-  const now = nowLocalDateTime();
+  const now = clock.nowLocalDateTime();
   return notifications.map((notification) => {
     if (notification.status !== "scheduled") {
       return notification;

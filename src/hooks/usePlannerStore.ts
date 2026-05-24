@@ -16,7 +16,8 @@ import {
   validateTaskDraft,
 } from "@/src/planner-invariants";
 import { useEffect, useReducer, useState } from "react";
-import type { EventDraft, PlannerState, TaskDraft } from "@/src/planner";
+import type { Clock, EventDraft, PlannerState, TaskDraft } from "@/src/planner";
+import { systemClock } from "@/src/planner-clock";
 import {
   decodeStoragePlannerState,
   encodeStoragePlannerState,
@@ -39,16 +40,19 @@ type PlannerAction =
   | { type: "snoozeNotification"; id: string; minutes: number }
   | { type: "refreshNotifications" };
 
-export function usePlannerStore() {
-  const [state, dispatch] = useReducer(plannerReducer, undefined, () =>
-    createInitialState()
+export function usePlannerStore(clock: Clock = systemClock) {
+  const [state, dispatch] = useReducer(
+    (currentState: PlannerState, action: PlannerAction) =>
+      plannerReducer(currentState, action, clock),
+    undefined,
+    () => createInitialState(clock)
   );
   const [hydrated, setHydrated] = useState(false);
 
   useEffect(function hydratePlannerStore() {
-    dispatch({ type: "replace", state: readPlannerState() });
+    dispatch({ type: "replace", state: readPlannerState(clock) });
     setHydrated(true);
-  }, []);
+  }, [clock]);
 
   useEffect(
     function persistPlannerState() {
@@ -125,7 +129,8 @@ export function usePlannerStore() {
  */
 function plannerReducer(
   state: PlannerState,
-  action: PlannerAction
+  action: PlannerAction,
+  clock: Clock
 ): PlannerState {
   switch (action.type) {
     // 로컬 스토리지에서 복원한 상태로 전체를 교체합니다.
@@ -151,8 +156,8 @@ function plannerReducer(
         return state;
       }
 
-      const task = createTaskFromDraft(validation.value);
-      const notification = createTaskNotification(task);
+      const task = createTaskFromDraft(validation.value, clock);
+      const notification = createTaskNotification(task, clock);
       return {
         ...state,
         tasks: [task, ...state.tasks],
@@ -175,8 +180,8 @@ function plannerReducer(
         return state;
       }
 
-      const task = updateTaskFromDraft(original, validation.value);
-      const notification = createTaskNotification(task);
+      const task = updateTaskFromDraft(original, validation.value, clock);
+      const notification = createTaskNotification(task, clock);
       return {
         ...state,
         tasks: state.tasks.map((item) => (item.id === action.id ? task : item)),
@@ -211,8 +216,8 @@ function plannerReducer(
       if (!validation.ok) {
         return state;
       }
-      const event = createEventFromDraft(validation.value);
-      const notification = createEventNotification(event);
+      const event = createEventFromDraft(validation.value, clock);
+      const notification = createEventNotification(event, clock);
       return {
         ...state,
         events: [...state.events, event],
@@ -235,8 +240,8 @@ function plannerReducer(
         return state;
       }
 
-      const event = updateEventFromDraft(original, validation.value);
-      const notification = createEventNotification(event);
+      const event = updateEventFromDraft(original, validation.value, clock);
+      const notification = createEventNotification(event, clock);
       return {
         ...state,
         events: state.events.map((item) =>
@@ -283,7 +288,7 @@ function plannerReducer(
     case "refreshNotifications":
       return {
         ...state,
-        notifications: refreshNotificationStatuses(state.notifications),
+        notifications: refreshNotificationStatuses(state.notifications, clock),
       };
     // 알 수 없는 액션은 현재 상태를 그대로 유지합니다.
     default:
@@ -299,8 +304,8 @@ function plannerReducer(
  *
  * @returns 복원된 플래너 상태(`PlannerState`)
  */
-function readPlannerState(): PlannerState {
-  const fallback = createInitialState();
+function readPlannerState(clock: Clock): PlannerState {
+  const fallback = createInitialState(clock);
   const raw = window.localStorage.getItem(STORAGE_KEY);
   if (!raw) {
     return fallback;

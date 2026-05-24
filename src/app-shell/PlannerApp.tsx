@@ -13,12 +13,12 @@ import {
   formatMonth,
   formatWeekTitle,
   parseIsoDate,
-  todayIso,
   toIsoDate,
 } from "@/src/planner";
+import { systemClock } from "@/src/planner-clock";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
 import type { EventDraft, TaskDraft } from "@/src/planner";
 
 type CalendarView = "month" | "week";
@@ -31,6 +31,7 @@ interface PlannerAppProps {
 export function PlannerApp({ view, initialDate }: PlannerAppProps) {
   const { state, hydrated, actions } = usePlannerStore();
   const router = useRouter();
+  const today = useMemo(() => systemClock.todayIso(), []);
   const routeDate = normalizeDate(initialDate);
   const toolbarTitle =
     view === "month"
@@ -42,13 +43,13 @@ export function PlannerApp({ view, initialDate }: PlannerAppProps) {
       return;
     }
 
-    const date = routeDate ?? todayIso();
+    const date = routeDate ?? today;
     actions.selectDate(date);
 
     if (!routeDate) {
       router.replace(routeFor(view, date), { scroll: false });
     }
-  }, [hydrated, routeDate, router, view]);
+  }, [hydrated, routeDate, router, today, view]);
 
   function selectDate(date: string) {
     actions.selectDate(date);
@@ -72,7 +73,7 @@ export function PlannerApp({ view, initialDate }: PlannerAppProps) {
   }
 
   function selectToday() {
-    selectDate(todayIso());
+    selectDate(today);
   }
 
   function addTask(draft: TaskDraft) {
@@ -158,6 +159,7 @@ export function PlannerApp({ view, initialDate }: PlannerAppProps) {
             <MiniCalendar
               visibleMonth={state.visibleMonth}
               selectedDate={state.selectedDate}
+              today={today}
               tasks={state.tasks}
               events={state.events}
               onSelectDate={selectDate}
@@ -185,6 +187,7 @@ export function PlannerApp({ view, initialDate }: PlannerAppProps) {
           <CalendarPanel
             visibleMonth={state.visibleMonth}
             selectedDate={state.selectedDate}
+            today={today}
             tasks={state.tasks}
             events={state.events}
             onSelectDate={selectDate}
@@ -192,6 +195,7 @@ export function PlannerApp({ view, initialDate }: PlannerAppProps) {
         ) : (
           <WeekTimeline
             selectedDate={state.selectedDate}
+            today={today}
             tasks={state.tasks}
             events={state.events}
             onSelectDate={selectDate}

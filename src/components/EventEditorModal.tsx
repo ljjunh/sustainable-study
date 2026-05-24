@@ -2,7 +2,7 @@
 
 import { FormEvent, useState } from "react";
 import { Modal } from "@/src/components/Modal";
-import { nowLocalDateTime } from "@/src/planner";
+import { systemClock } from "@/src/planner-clock";
 import { validateEventDraft } from "@/src/planner-invariants";
 import type { EventCategory, EventDraft } from "@/src/planner";
 
@@ -125,7 +125,9 @@ export function EventEditorModal({
           <input
             id="event-reminder"
             type="datetime-local"
-            min={isEditing && reminderAt ? reminderAt : nowLocalDateTime()}
+            min={
+              isEditing && reminderAt ? reminderAt : systemClock.nowLocalDateTime()
+            }
             value={reminderAt}
             onChange={(event) => setReminderAt(event.target.value)}
           />

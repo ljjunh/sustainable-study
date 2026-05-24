@@ -6,7 +6,6 @@ import {
   formatMonth,
   getEventsForDate,
   getTasksForDate,
-  todayIso,
 } from "@/src/planner";
 import type { Task, ScheduleEvent } from "@/src/planner";
 
@@ -15,6 +14,7 @@ const weekdays = ["일", "월", "화", "수", "목", "금", "토"];
 interface MiniCalendarProps {
   visibleMonth: string;
   selectedDate: string;
+  today: string;
   tasks: Task[];
   events: ScheduleEvent[];
   onSelectDate(date: string): void;
@@ -24,12 +24,13 @@ interface MiniCalendarProps {
 export function MiniCalendar({
   visibleMonth,
   selectedDate,
+  today,
   tasks,
   events,
   onSelectDate,
   onVisibleMonthChange,
 }: MiniCalendarProps) {
-  const days = createMonthGrid(visibleMonth, todayIso());
+  const days = createMonthGrid(visibleMonth, today);
 
   return (
     <section className="mini-calendar">
