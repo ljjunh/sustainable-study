@@ -7,7 +7,15 @@ import { SchedulePanel } from "@/src/components/SchedulePanel";
 import { TaskPanel } from "@/src/components/TaskPanel";
 import { WeekTimeline } from "@/src/components/WeekTimeline";
 import { usePlannerStore } from "@/src/hooks/usePlannerStore";
-import { addDays, addMonths, formatMonth, formatWeekTitle, parseIsoDate, todayIso, toIsoDate } from "@/src/planner";
+import {
+  addDays,
+  addMonths,
+  formatMonth,
+  formatWeekTitle,
+  parseIsoDate,
+  todayIso,
+  toIsoDate,
+} from "@/src/planner";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
@@ -24,7 +32,10 @@ export function PlannerApp({ view, initialDate }: PlannerAppProps) {
   const { state, hydrated, actions } = usePlannerStore();
   const router = useRouter();
   const routeDate = normalizeDate(initialDate);
-  const toolbarTitle = view === "month" ? formatMonth(state.visibleMonth) : formatWeekTitle(state.selectedDate);
+  const toolbarTitle =
+    view === "month"
+      ? formatMonth(state.visibleMonth)
+      : formatWeekTitle(state.selectedDate);
 
   useEffect(() => {
     if (!hydrated) {
@@ -45,11 +56,19 @@ export function PlannerApp({ view, initialDate }: PlannerAppProps) {
   }
 
   function movePrevious() {
-    selectDate(view === "month" ? addMonths(state.visibleMonth, -1) : addDays(state.selectedDate, -7));
+    selectDate(
+      view === "month"
+        ? addMonths(state.visibleMonth, -1)
+        : addDays(state.selectedDate, -7)
+    );
   }
 
   function moveNext() {
-    selectDate(view === "month" ? addMonths(state.visibleMonth, 1) : addDays(state.selectedDate, 7));
+    selectDate(
+      view === "month"
+        ? addMonths(state.visibleMonth, 1)
+        : addDays(state.selectedDate, 7)
+    );
   }
 
   function selectToday() {
@@ -84,23 +103,43 @@ export function PlannerApp({ view, initialDate }: PlannerAppProps) {
           <span>일정과 할 일</span>
         </div>
         <div className="calendar-toolbar" aria-label="캘린더 이동">
-          <button className="secondary-button" type="button" onClick={selectToday}>
+          <button
+            className="secondary-button"
+            type="button"
+            onClick={selectToday}
+          >
             오늘
           </button>
-          <button className="icon-button" type="button" aria-label="이전" onClick={movePrevious}>
+          <button
+            className="icon-button"
+            type="button"
+            aria-label="이전"
+            onClick={movePrevious}
+          >
             {"<"}
           </button>
-          <button className="icon-button" type="button" aria-label="다음" onClick={moveNext}>
+          <button
+            className="icon-button"
+            type="button"
+            aria-label="다음"
+            onClick={moveNext}
+          >
             {">"}
           </button>
           <div className="toolbar-title">{toolbarTitle}</div>
         </div>
         <div className="topbar-actions">
           <div className="segmented view-switch" aria-label="캘린더 보기">
-            <Link className={view === "month" ? "active" : ""} href={routeFor("month", state.selectedDate)}>
+            <Link
+              className={view === "month" ? "active" : ""}
+              href={routeFor("month", state.selectedDate)}
+            >
               월
             </Link>
-            <Link className={view === "week" ? "active" : ""} href={routeFor("week", state.selectedDate)}>
+            <Link
+              className={view === "week" ? "active" : ""}
+              href={routeFor("week", state.selectedDate)}
+            >
               주
             </Link>
           </div>
@@ -117,7 +156,10 @@ export function PlannerApp({ view, initialDate }: PlannerAppProps) {
         <aside className="calendar-sidebar">
           {view === "week" ? (
             <MiniCalendar
-              state={state}
+              visibleMonth={state.visibleMonth}
+              selectedDate={state.selectedDate}
+              tasks={state.tasks}
+              events={state.events}
               onSelectDate={selectDate}
               onVisibleMonthChange={actions.setVisibleMonth}
             />
@@ -140,10 +182,18 @@ export function PlannerApp({ view, initialDate }: PlannerAppProps) {
         </aside>
 
         {view === "month" ? (
-          <CalendarPanel state={state} onSelectDate={selectDate} />
+          <CalendarPanel
+            visibleMonth={state.visibleMonth}
+            selectedDate={state.selectedDate}
+            tasks={state.tasks}
+            events={state.events}
+            onSelectDate={selectDate}
+          />
         ) : (
           <WeekTimeline
-            state={state}
+            selectedDate={state.selectedDate}
+            tasks={state.tasks}
+            events={state.events}
             onSelectDate={selectDate}
             onAddEvent={addEvent}
             onUpdateEvent={updateEvent}
