@@ -154,10 +154,26 @@ export function PlannerApp({ view, initialDate }: PlannerAppProps) {
   );
 }
 
+/**
+ * 뷰 타입과 날짜를 기반으로 캘린더 라우트 URL을 생성합니다.
+ *
+ * @param view 캘린더 뷰 타입(`month` | `week`)
+ * @param date 기준 날짜(ISO 형식 `YYYY-MM-DD`)
+ * @returns `/{view}?date={date}` 형식의 라우트 문자열
+ */
 function routeFor(view: CalendarView, date: string): string {
   return `/${view}?date=${date}`;
 }
 
+/**
+ * 라우트/쿼리에서 받은 날짜 문자열의 유효성을 검사합니다.
+ *
+ * - `YYYY-MM-DD` 형식만 허용합니다.
+ * - 달력에 존재하지 않는 날짜(예: `2026-02-30`)는 거부합니다.
+ *
+ * @param value 라우트/쿼리 파라미터에서 받은 원본 날짜 문자열
+ * @returns 유효하면 원본 ISO 날짜 문자열, 아니면 `null`
+ */
 function normalizeDate(value: string | undefined): string | null {
   if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value)) {
     return null;
