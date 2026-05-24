@@ -11,9 +11,16 @@ import {
   updateEventFromDraft,
   updateTaskFromDraft,
 } from "@/src/planner";
-import { validateEventDraft, validateTaskDraft } from "@/src/planner-invariants";
+import {
+  validateEventDraft,
+  validateTaskDraft,
+} from "@/src/planner-invariants";
 import { useEffect, useReducer, useState } from "react";
 import type { EventDraft, PlannerState, TaskDraft } from "@/src/planner";
+import {
+  decodeStoragePlannerState,
+  encodeStoragePlannerState,
+} from "@/src/planner-storage";
 
 const STORAGE_KEY = "plain-planner:v1";
 
@@ -48,7 +55,11 @@ export function usePlannerStore() {
       if (!hydrated) {
         return;
       }
-      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+      // 내부 상태를 저장 포맷으로 인코딩한 뒤 localStorage에 기록합니다.
+      window.localStorage.setItem(
+        STORAGE_KEY,
+        JSON.stringify(encodeStoragePlannerState(state))
+      );
     },
     [hydrated, state]
   );
@@ -296,22 +307,13 @@ function readPlannerState(): PlannerState {
   }
 
   try {
-    const parsed = JSON.parse(raw) as Partial<PlannerState>;
-    return {
-      tasks: Array.isArray(parsed.tasks) ? parsed.tasks : fallback.tasks,
-      events: Array.isArray(parsed.events) ? parsed.events : fallback.events,
-      notifications: Array.isArray(parsed.notifications)
-        ? parsed.notifications
-        : fallback.notifications,
-      selectedDate:
-        typeof parsed.selectedDate === "string"
-          ? parsed.selectedDate
-          : fallback.selectedDate,
-      visibleMonth:
-        typeof parsed.visibleMonth === "string"
-          ? parsed.visibleMonth
-          : fallback.visibleMonth,
-    };
+    const parsed = JSON.parse(raw) as unknown;
+    // 저장 포맷을 도메인 상태로 디코딩합니다.
+    const decoded = decodeStoragePlannerState(parsed);
+    if (!decoded) {
+      return fallback;
+    }
+    return decoded;
   } catch {
     return fallback;
   }
