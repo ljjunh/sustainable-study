@@ -19,6 +19,11 @@ import { useEffect, useReducer, useState } from "react";
 import type { Clock, EventDraft, PlannerState, TaskDraft } from "@/src/planner";
 import { systemClock } from "@/src/planner-clock";
 import {
+  browserPlannerStorage,
+  browserScheduler,
+} from "@/src/planner-runtime";
+import type { PlannerStoragePort, SchedulerPort } from "@/src/planner-runtime";
+import {
   decodeStoragePlannerState,
   encodeStoragePlannerState,
 } from "@/src/planner-storage";
@@ -40,7 +45,17 @@ type PlannerAction =
   | { type: "snoozeNotification"; id: string; minutes: number }
   | { type: "refreshNotifications" };
 
-export function usePlannerStore(clock: Clock = systemClock) {
+interface UsePlannerStoreDeps {
+  clock?: Clock;
+  storage?: PlannerStoragePort;
+  scheduler?: SchedulerPort;
+}
+
+export function usePlannerStore({
+  clock = systemClock,
+  storage = browserPlannerStorage,
+  scheduler = browserScheduler,
+}: UsePlannerStoreDeps = {}) {
   const [state, dispatch] = useReducer(
     (currentState: PlannerState, action: PlannerAction) =>
       plannerReducer(currentState, action, clock),
@@ -50,31 +65,35 @@ export function usePlannerStore(clock: Clock = systemClock) {
   const [hydrated, setHydrated] = useState(false);
 
   useEffect(function hydratePlannerStore() {
-    dispatch({ type: "replace", state: readPlannerState(clock) });
+    dispatch({ type: "replace", state: readPlannerState(clock, storage) });
     setHydrated(true);
-  }, [clock]);
+  }, [clock, storage]);
 
   useEffect(
     function persistPlannerState() {
       if (!hydrated) {
         return;
       }
-      // 내부 상태를 저장 포맷으로 인코딩한 뒤 localStorage에 기록합니다.
-      window.localStorage.setItem(
-        STORAGE_KEY,
-        JSON.stringify(encodeStoragePlannerState(state))
-      );
+      // 내부 상태를 저장 포맷으로 인코딩한 뒤 저장소 포트에 기록합니다.
+      try {
+        storage.setItem(
+          STORAGE_KEY,
+          JSON.stringify(encodeStoragePlannerState(state))
+        );
+      } catch {
+        // 저장 실패는 UI 동작을 막지 않도록 무시합니다.
+      }
     },
-    [hydrated, state]
+    [hydrated, state, storage]
   );
 
   useEffect(function startNotificationRefreshTimer() {
-    const timer = window.setInterval(() => {
+    const timer = scheduler.setInterval(() => {
       dispatch({ type: "refreshNotifications" });
     }, 30_000);
 
-    return () => window.clearInterval(timer);
-  }, []);
+    return () => scheduler.clearInterval(timer);
+  }, [scheduler]);
 
   return {
     state,
@@ -304,14 +323,16 @@ function plannerReducer(
  *
  * @returns 복원된 플래너 상태(`PlannerState`)
  */
-function readPlannerState(clock: Clock): PlannerState {
+function readPlannerState(
+  clock: Clock,
+  storage: PlannerStoragePort
+): PlannerState {
   const fallback = createInitialState(clock);
-  const raw = window.localStorage.getItem(STORAGE_KEY);
-  if (!raw) {
-    return fallback;
-  }
-
   try {
+    const raw = storage.getItem(STORAGE_KEY);
+    if (!raw) {
+      return fallback;
+    }
     const parsed = JSON.parse(raw) as unknown;
     // 저장 포맷을 도메인 상태로 디코딩합니다.
     const decoded = decodeStoragePlannerState(parsed);
