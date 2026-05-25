@@ -1,59 +1,77 @@
 "use client";
 
-import {
-  createEventFromDraft,
-  createEventNotification,
-  createInitialState,
-  createTaskFromDraft,
-  createTaskNotification,
-  refreshNotificationStatuses,
-  snoozeNotification,
-  updateEventFromDraft,
-  updateTaskFromDraft
-} from "@/src/planner";
+import { createInitialState } from "@/src/planner";
 import { useEffect, useReducer, useState } from "react";
-import type { EventDraft, PlannerState, TaskDraft } from "@/src/planner";
+import type { Clock, EventDraft, PlannerState, TaskDraft } from "@/src/planner";
+import { systemClock } from "@/src/planner-clock";
+import {
+  plannerReducer,
+  type PlannerAction,
+} from "@/src/hooks/planner-reducer";
+import { browserPlannerStorage, browserScheduler } from "@/src/planner-runtime";
+import type { PlannerStoragePort, SchedulerPort } from "@/src/planner-runtime";
+import {
+  decodeStoragePlannerState,
+  encodeStoragePlannerState,
+} from "@/src/planner-storage";
 
 const STORAGE_KEY = "plain-planner:v1";
 
-type PlannerAction =
-  | { type: "replace"; state: PlannerState }
-  | { type: "selectDate"; date: string }
-  | { type: "setVisibleMonth"; month: string }
-  | { type: "addTask"; draft: TaskDraft }
-  | { type: "updateTask"; id: string; draft: TaskDraft }
-  | { type: "toggleTask"; id: string }
-  | { type: "deleteTask"; id: string }
-  | { type: "addEvent"; draft: EventDraft }
-  | { type: "updateEvent"; id: string; draft: EventDraft }
-  | { type: "deleteEvent"; id: string }
-  | { type: "markNotificationRead"; id: string }
-  | { type: "snoozeNotification"; id: string; minutes: number }
-  | { type: "refreshNotifications" };
+interface UsePlannerStoreDeps {
+  clock?: Clock;
+  storage?: PlannerStoragePort;
+  scheduler?: SchedulerPort;
+}
 
-export function usePlannerStore() {
-  const [state, dispatch] = useReducer(plannerReducer, undefined, () => createInitialState());
+export function usePlannerStore({
+  clock = systemClock,
+  storage = browserPlannerStorage,
+  scheduler = browserScheduler,
+}: UsePlannerStoreDeps = {}) {
+  const [state, dispatch] = useReducer(
+    (currentState: PlannerState, action: PlannerAction) =>
+      plannerReducer(currentState, action, clock),
+    undefined,
+    () => createInitialState(clock)
+  );
   const [hydrated, setHydrated] = useState(false);
 
-  useEffect(() => {
-    dispatch({ type: "replace", state: readPlannerState() });
-    setHydrated(true);
-  }, []);
+  useEffect(
+    function hydratePlannerStore() {
+      dispatch({ type: "replace", state: readPlannerState(clock, storage) });
+      setHydrated(true);
+    },
+    [clock, storage]
+  );
 
-  useEffect(() => {
-    if (!hydrated) {
-      return;
-    }
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-  }, [hydrated, state]);
+  useEffect(
+    function persistPlannerState() {
+      if (!hydrated) {
+        return;
+      }
+      // 내부 상태를 저장 포맷으로 인코딩한 뒤 저장소 포트에 기록합니다.
+      try {
+        storage.setItem(
+          STORAGE_KEY,
+          JSON.stringify(encodeStoragePlannerState(state))
+        );
+      } catch {
+        // 저장 실패는 UI 동작을 막지 않도록 무시합니다.
+      }
+    },
+    [hydrated, state, storage]
+  );
 
-  useEffect(() => {
-    const timer = window.setInterval(() => {
-      dispatch({ type: "refreshNotifications" });
-    }, 30_000);
+  useEffect(
+    function startNotificationRefreshTimer() {
+      const timer = scheduler.setInterval(() => {
+        dispatch({ type: "refreshNotifications" });
+      }, 30_000);
 
-    return () => window.clearInterval(timer);
-  }, []);
+      return () => scheduler.clearInterval(timer);
+    },
+    [scheduler]
+  );
 
   return {
     state,
@@ -91,140 +109,36 @@ export function usePlannerStore() {
       },
       snoozeNotification(id: string, minutes: number) {
         dispatch({ type: "snoozeNotification", id, minutes });
-      }
-    }
+      },
+    },
   };
 }
 
-function plannerReducer(state: PlannerState, action: PlannerAction): PlannerState {
-  switch (action.type) {
-    case "replace":
-      return action.state;
-    case "selectDate":
-      return {
-        ...state,
-        selectedDate: action.date,
-        visibleMonth: action.date.slice(0, 7) === state.visibleMonth.slice(0, 7) ? state.visibleMonth : action.date
-      };
-    case "setVisibleMonth":
-      return { ...state, visibleMonth: action.month };
-    case "addTask": {
-      const task = createTaskFromDraft(action.draft);
-      const notification = createTaskNotification(task);
-      return {
-        ...state,
-        tasks: [task, ...state.tasks],
-        notifications: notification ? [notification, ...state.notifications] : state.notifications,
-        selectedDate: task.dueDate,
-        visibleMonth: task.dueDate
-      };
-    }
-    case "updateTask": {
-      const original = state.tasks.find((task) => task.id === action.id);
-      if (!original) {
-        return state;
-      }
-
-      const task = updateTaskFromDraft(original, action.draft);
-      const notification = createTaskNotification(task);
-      return {
-        ...state,
-        tasks: state.tasks.map((item) => (item.id === action.id ? task : item)),
-        notifications: [
-          ...(notification ? [notification] : []),
-          ...state.notifications.filter((item) => item.sourceId !== action.id)
-        ],
-        selectedDate: task.dueDate,
-        visibleMonth: task.dueDate
-      };
-    }
-    case "toggleTask":
-      return {
-        ...state,
-        tasks: state.tasks.map((task) => (task.id === action.id ? { ...task, done: !task.done } : task))
-      };
-    case "deleteTask":
-      return {
-        ...state,
-        tasks: state.tasks.filter((task) => task.id !== action.id),
-        notifications: state.notifications.filter((notification) => notification.sourceId !== action.id)
-      };
-    case "addEvent": {
-      const event = createEventFromDraft(action.draft);
-      const notification = createEventNotification(event);
-      return {
-        ...state,
-        events: [...state.events, event],
-        notifications: notification ? [notification, ...state.notifications] : state.notifications,
-        selectedDate: event.date,
-        visibleMonth: event.date
-      };
-    }
-    case "updateEvent": {
-      const original = state.events.find((event) => event.id === action.id);
-      if (!original) {
-        return state;
-      }
-
-      const event = updateEventFromDraft(original, action.draft);
-      const notification = createEventNotification(event);
-      return {
-        ...state,
-        events: state.events.map((item) => (item.id === action.id ? event : item)),
-        notifications: [
-          ...(notification ? [notification] : []),
-          ...state.notifications.filter((item) => item.sourceId !== action.id)
-        ],
-        selectedDate: event.date,
-        visibleMonth: event.date
-      };
-    }
-    case "deleteEvent":
-      return {
-        ...state,
-        events: state.events.filter((event) => event.id !== action.id),
-        notifications: state.notifications.filter((notification) => notification.sourceId !== action.id)
-      };
-    case "markNotificationRead":
-      return {
-        ...state,
-        notifications: state.notifications.map((notification) =>
-          notification.id === action.id ? { ...notification, status: "read" } : notification
-        )
-      };
-    case "snoozeNotification":
-      return {
-        ...state,
-        notifications: state.notifications.map((notification) =>
-          notification.id === action.id ? snoozeNotification(notification, action.minutes) : notification
-        )
-      };
-    case "refreshNotifications":
-      return {
-        ...state,
-        notifications: refreshNotificationStatuses(state.notifications)
-      };
-    default:
-      return state;
-  }
-}
-
-function readPlannerState(): PlannerState {
-  const fallback = createInitialState();
-  const raw = window.localStorage.getItem(STORAGE_KEY);
-  if (!raw) {
-    return fallback;
-  }
-
+/**
+ * 로컬 스토리지에 저장된 플래너 상태를 읽어 안전하게 복원합니다.
+ *
+ * - 저장값이 없거나 JSON 파싱에 실패하면 초기 상태를 반환합니다.
+ * - 필드별 타입을 검증한 뒤 유효한 값만 사용하고, 나머지는 초기 상태로 대체합니다.
+ *
+ * @returns 복원된 플래너 상태(`PlannerState`)
+ */
+function readPlannerState(
+  clock: Clock,
+  storage: PlannerStoragePort
+): PlannerState {
+  const fallback = createInitialState(clock);
   try {
-    const parsed = JSON.parse(raw) as Partial<PlannerState>;
-    return {
-      tasks: Array.isArray(parsed.tasks) ? parsed.tasks : fallback.tasks,
-      events: Array.isArray(parsed.events) ? parsed.events : fallback.events,
-      notifications: Array.isArray(parsed.notifications) ? parsed.notifications : fallback.notifications,
-      selectedDate: typeof parsed.selectedDate === "string" ? parsed.selectedDate : fallback.selectedDate,
-      visibleMonth: typeof parsed.visibleMonth === "string" ? parsed.visibleMonth : fallback.visibleMonth
-    };
+    const raw = storage.getItem(STORAGE_KEY);
+    if (!raw) {
+      return fallback;
+    }
+    const parsed = JSON.parse(raw) as unknown;
+    // 저장 포맷을 도메인 상태로 디코딩합니다.
+    const decoded = decodeStoragePlannerState(parsed);
+    if (!decoded) {
+      return fallback;
+    }
+    return decoded;
   } catch {
     return fallback;
   }

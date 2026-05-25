@@ -4,6 +4,12 @@ export type Priority = "low" | "medium" | "high";
 export type EventCategory = "work" | "personal" | "study" | "health";
 export type NotificationStatus = "scheduled" | "ready" | "read";
 
+export interface Clock {
+  now(): Date;
+  todayIso(): IsoDate;
+  nowLocalDateTime(): LocalDateTime;
+}
+
 export interface Task {
   id: string;
   title: string;
@@ -84,7 +90,10 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 const weekdays = ["일", "월", "화", "수", "목", "금", "토"];
 
 export function createId(prefix: string): string {
-  const random = typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : String(Date.now());
+  const random =
+    typeof crypto !== "undefined" && "randomUUID" in crypto
+      ? crypto.randomUUID()
+      : String(Date.now());
   return `${prefix}_${random}`;
 }
 
@@ -102,14 +111,6 @@ export function toLocalDateTime(date: Date): LocalDateTime {
   return `${isoDate}T${hour}:${minute}`;
 }
 
-export function todayIso(): IsoDate {
-  return toIsoDate(new Date());
-}
-
-export function nowLocalDateTime(): LocalDateTime {
-  return toLocalDateTime(new Date());
-}
-
 export function parseIsoDate(value: IsoDate): Date {
   const [year = "0", month = "1", day = "1"] = value.split("-");
   return new Date(Number(year), Number(month) - 1, Number(day));
@@ -121,7 +122,10 @@ export function addDays(value: IsoDate, amount: number): IsoDate {
   return toIsoDate(date);
 }
 
-export function addMinutes(value: LocalDateTime, amount: number): LocalDateTime {
+export function addMinutes(
+  value: LocalDateTime,
+  amount: number
+): LocalDateTime {
   const date = new Date(value);
   date.setMinutes(date.getMinutes() + amount);
   return toLocalDateTime(date);
@@ -146,13 +150,19 @@ export function formatMonth(value: IsoDate): string {
 export function formatWeekTitle(value: IsoDate): string {
   const date = parseIsoDate(value);
   const firstDayOfMonth = new Date(date.getFullYear(), date.getMonth(), 1);
-  const weekNumber = Math.floor((date.getDate() + firstDayOfMonth.getDay() - 1) / 7) + 1;
-  return `${date.getFullYear()}년 ${date.getMonth() + 1}월 ${weekNumber}번째 주`;
+  const weekNumber =
+    Math.floor((date.getDate() + firstDayOfMonth.getDay() - 1) / 7) + 1;
+  return `${date.getFullYear()}년 ${
+    date.getMonth() + 1
+  }월 ${weekNumber}번째 주`;
 }
 
 export function formatDate(value: IsoDate): string {
   const date = parseIsoDate(value);
-  return `${date.getFullYear()}.${String(date.getMonth() + 1).padStart(2, "0")}.${String(date.getDate()).padStart(2, "0")}`;
+  return `${date.getFullYear()}.${String(date.getMonth() + 1).padStart(
+    2,
+    "0"
+  )}.${String(date.getDate()).padStart(2, "0")}`;
 }
 
 export function formatDateTime(value: LocalDateTime): string {
@@ -160,11 +170,17 @@ export function formatDateTime(value: LocalDateTime): string {
   return `${formatDate(date)} ${time}`;
 }
 
-export function compareDateTime(left: LocalDateTime, right: LocalDateTime): number {
+export function compareDateTime(
+  left: LocalDateTime,
+  right: LocalDateTime
+): number {
   return new Date(left).getTime() - new Date(right).getTime();
 }
 
-export function createMonthGrid(visibleMonth: IsoDate, today: IsoDate): CalendarDay[] {
+export function createMonthGrid(
+  visibleMonth: IsoDate,
+  today: IsoDate
+): CalendarDay[] {
   const monthStart = parseIsoDate(visibleMonth);
   const firstDay = new Date(monthStart.getFullYear(), monthStart.getMonth(), 1);
   const gridStart = new Date(firstDay.getTime() - firstDay.getDay() * DAY_MS);
@@ -177,12 +193,15 @@ export function createMonthGrid(visibleMonth: IsoDate, today: IsoDate): Calendar
       date: iso,
       dayOfMonth: date.getDate(),
       isCurrentMonth: date.getMonth() === currentMonth,
-      isToday: iso === today
+      isToday: iso === today,
     };
   });
 }
 
-export function createWeekDays(selectedDate: IsoDate, today: IsoDate): WeekDay[] {
+export function createWeekDays(
+  selectedDate: IsoDate,
+  today: IsoDate
+): WeekDay[] {
   const start = startOfWeek(selectedDate);
   return Array.from({ length: 7 }, (_, index) => {
     const date = addDays(start, index);
@@ -191,7 +210,7 @@ export function createWeekDays(selectedDate: IsoDate, today: IsoDate): WeekDay[]
       date,
       dayOfMonth: parsed.getDate(),
       weekday: weekdays[index],
-      isToday: date === today
+      isToday: date === today,
     };
   });
 }
@@ -199,20 +218,31 @@ export function createWeekDays(selectedDate: IsoDate, today: IsoDate): WeekDay[]
 export function getTasksForDate(tasks: Task[], date: IsoDate): Task[] {
   return tasks
     .filter((task) => task.dueDate === date)
-    .sort((left, right) => Number(left.done) - Number(right.done) || priorityWeight(right.priority) - priorityWeight(left.priority));
+    .sort(
+      (left, right) =>
+        Number(left.done) - Number(right.done) ||
+        priorityWeight(right.priority) - priorityWeight(left.priority)
+    );
 }
 
-export function getEventsForDate(events: ScheduleEvent[], date: IsoDate): ScheduleEvent[] {
+export function getEventsForDate(
+  events: ScheduleEvent[],
+  date: IsoDate
+): ScheduleEvent[] {
   return events
     .filter((event) => event.date === date)
-    .sort((left, right) => `${left.startTime}-${left.endTime}`.localeCompare(`${right.startTime}-${right.endTime}`));
+    .sort((left, right) =>
+      `${left.startTime}-${left.endTime}`.localeCompare(
+        `${right.startTime}-${right.endTime}`
+      )
+    );
 }
 
-export function createInitialState(): PlannerState {
-  const today = todayIso();
+export function createInitialState(clock: Clock): PlannerState {
+  const today = clock.todayIso();
   const tomorrow = addDays(today, 1);
   const nextWeek = addDays(today, 7);
-  const createdAt = nowLocalDateTime();
+  const createdAt = clock.nowLocalDateTime();
 
   const tasks: Task[] = [
     {
@@ -224,7 +254,7 @@ export function createInitialState(): PlannerState {
       note: "",
       reminderAt: `${today}T16:00`,
       createdAt,
-      updatedAt: createdAt
+      updatedAt: createdAt,
     },
     {
       id: "task_seed_2",
@@ -235,8 +265,8 @@ export function createInitialState(): PlannerState {
       note: "",
       reminderAt: `${tomorrow}T09:30`,
       createdAt,
-      updatedAt: createdAt
-    }
+      updatedAt: createdAt,
+    },
   ];
 
   const events: ScheduleEvent[] = [
@@ -250,7 +280,7 @@ export function createInitialState(): PlannerState {
       note: "",
       reminderAt: `${today}T09:50`,
       createdAt,
-      updatedAt: createdAt
+      updatedAt: createdAt,
     },
     {
       id: "event_seed_2",
@@ -262,23 +292,30 @@ export function createInitialState(): PlannerState {
       note: "",
       reminderAt: `${nextWeek}T19:30`,
       createdAt,
-      updatedAt: createdAt
-    }
+      updatedAt: createdAt,
+    },
   ];
 
   return {
     tasks,
     events,
-    notifications: [...tasks.map(createTaskNotification), ...events.map(createEventNotification)].filter(
-      (notification): notification is PlannerNotification => notification !== null
+    notifications: [
+      ...tasks.map((task) => createTaskNotification(task, clock)),
+      ...events.map((event) => createEventNotification(event, clock)),
+    ].filter(
+      (notification): notification is PlannerNotification =>
+        notification !== null
     ),
     selectedDate: today,
-    visibleMonth: today
+    visibleMonth: today,
   };
 }
 
-export function createTaskFromDraft(draft: TaskDraft): Task {
-  const timestamp = nowLocalDateTime();
+export function createTaskFromDraft(
+  draft: TaskDraft,
+  clock: Clock
+): Task {
+  const timestamp = clock.nowLocalDateTime();
   return {
     id: createId("task"),
     title: draft.title.trim(),
@@ -288,12 +325,15 @@ export function createTaskFromDraft(draft: TaskDraft): Task {
     note: draft.note.trim(),
     reminderAt: draft.reminderAt,
     createdAt: timestamp,
-    updatedAt: timestamp
+    updatedAt: timestamp,
   };
 }
 
-export function createEventFromDraft(draft: EventDraft): ScheduleEvent {
-  const timestamp = nowLocalDateTime();
+export function createEventFromDraft(
+  draft: EventDraft,
+  clock: Clock
+): ScheduleEvent {
+  const timestamp = clock.nowLocalDateTime();
   return {
     id: createId("event"),
     title: draft.title.trim(),
@@ -304,11 +344,15 @@ export function createEventFromDraft(draft: EventDraft): ScheduleEvent {
     note: draft.note.trim(),
     reminderAt: draft.reminderAt,
     createdAt: timestamp,
-    updatedAt: timestamp
+    updatedAt: timestamp,
   };
 }
 
-export function updateTaskFromDraft(task: Task, draft: TaskDraft): Task {
+export function updateTaskFromDraft(
+  task: Task,
+  draft: TaskDraft,
+  clock: Clock
+): Task {
   return {
     ...task,
     title: draft.title.trim(),
@@ -316,11 +360,15 @@ export function updateTaskFromDraft(task: Task, draft: TaskDraft): Task {
     priority: draft.priority,
     note: draft.note.trim(),
     reminderAt: draft.reminderAt,
-    updatedAt: nowLocalDateTime()
+    updatedAt: clock.nowLocalDateTime(),
   };
 }
 
-export function updateEventFromDraft(event: ScheduleEvent, draft: EventDraft): ScheduleEvent {
+export function updateEventFromDraft(
+  event: ScheduleEvent,
+  draft: EventDraft,
+  clock: Clock
+): ScheduleEvent {
   return {
     ...event,
     title: draft.title.trim(),
@@ -330,14 +378,18 @@ export function updateEventFromDraft(event: ScheduleEvent, draft: EventDraft): S
     category: draft.category,
     note: draft.note.trim(),
     reminderAt: draft.reminderAt,
-    updatedAt: nowLocalDateTime()
+    updatedAt: clock.nowLocalDateTime(),
   };
 }
 
-export function createTaskNotification(task: Task): PlannerNotification | null {
+export function createTaskNotification(
+  task: Task,
+  clock: Clock
+): PlannerNotification | null {
   if (!task.reminderAt) {
     return null;
   }
+  const now = clock.nowLocalDateTime();
 
   return {
     id: createId("notice"),
@@ -346,15 +398,19 @@ export function createTaskNotification(task: Task): PlannerNotification | null {
     title: task.title,
     body: `${task.dueDate}까지 완료`,
     notifyAt: task.reminderAt,
-    status: compareDateTime(task.reminderAt, nowLocalDateTime()) <= 0 ? "ready" : "scheduled",
-    createdAt: nowLocalDateTime()
+    status: compareDateTime(task.reminderAt, now) <= 0 ? "ready" : "scheduled",
+    createdAt: now,
   };
 }
 
-export function createEventNotification(event: ScheduleEvent): PlannerNotification | null {
+export function createEventNotification(
+  event: ScheduleEvent,
+  clock: Clock
+): PlannerNotification | null {
   if (!event.reminderAt) {
     return null;
   }
+  const now = clock.nowLocalDateTime();
 
   return {
     id: createId("notice"),
@@ -363,26 +419,34 @@ export function createEventNotification(event: ScheduleEvent): PlannerNotificati
     title: event.title,
     body: `${event.date} ${event.startTime}-${event.endTime}`,
     notifyAt: event.reminderAt,
-    status: compareDateTime(event.reminderAt, nowLocalDateTime()) <= 0 ? "ready" : "scheduled",
-    createdAt: nowLocalDateTime()
+    status: compareDateTime(event.reminderAt, now) <= 0 ? "ready" : "scheduled",
+    createdAt: now,
   };
 }
 
-export function refreshNotificationStatuses(notifications: PlannerNotification[]): PlannerNotification[] {
-  const now = nowLocalDateTime();
+export function refreshNotificationStatuses(
+  notifications: PlannerNotification[],
+  clock: Clock
+): PlannerNotification[] {
+  const now = clock.nowLocalDateTime();
   return notifications.map((notification) => {
     if (notification.status !== "scheduled") {
       return notification;
     }
-    return compareDateTime(notification.notifyAt, now) <= 0 ? { ...notification, status: "ready" } : notification;
+    return compareDateTime(notification.notifyAt, now) <= 0
+      ? { ...notification, status: "ready" }
+      : notification;
   });
 }
 
-export function snoozeNotification(notification: PlannerNotification, minutes: number): PlannerNotification {
+export function snoozeNotification(
+  notification: PlannerNotification,
+  minutes: number
+): PlannerNotification {
   return {
     ...notification,
     notifyAt: addMinutes(notification.notifyAt, minutes),
-    status: "scheduled"
+    status: "scheduled",
   };
 }
 

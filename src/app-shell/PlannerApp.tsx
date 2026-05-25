@@ -7,10 +7,18 @@ import { SchedulePanel } from "@/src/components/SchedulePanel";
 import { TaskPanel } from "@/src/components/TaskPanel";
 import { WeekTimeline } from "@/src/components/WeekTimeline";
 import { usePlannerStore } from "@/src/hooks/usePlannerStore";
-import { addDays, addMonths, formatMonth, formatWeekTitle, parseIsoDate, todayIso, toIsoDate } from "@/src/planner";
+import {
+  addDays,
+  addMonths,
+  formatMonth,
+  formatWeekTitle,
+  parseIsoDate,
+  toIsoDate,
+} from "@/src/planner";
+import { systemClock } from "@/src/planner-clock";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
 import type { EventDraft, TaskDraft } from "@/src/planner";
 
 type CalendarView = "month" | "week";
@@ -23,21 +31,25 @@ interface PlannerAppProps {
 export function PlannerApp({ view, initialDate }: PlannerAppProps) {
   const { state, hydrated, actions } = usePlannerStore();
   const router = useRouter();
+  const today = useMemo(() => systemClock.todayIso(), []);
   const routeDate = normalizeDate(initialDate);
-  const toolbarTitle = view === "month" ? formatMonth(state.visibleMonth) : formatWeekTitle(state.selectedDate);
+  const toolbarTitle =
+    view === "month"
+      ? formatMonth(state.visibleMonth)
+      : formatWeekTitle(state.selectedDate);
 
   useEffect(() => {
     if (!hydrated) {
       return;
     }
 
-    const date = routeDate ?? todayIso();
+    const date = routeDate ?? today;
     actions.selectDate(date);
 
     if (!routeDate) {
       router.replace(routeFor(view, date), { scroll: false });
     }
-  }, [hydrated, routeDate, router, view]);
+  }, [hydrated, routeDate, router, today, view]);
 
   function selectDate(date: string) {
     actions.selectDate(date);
@@ -45,15 +57,23 @@ export function PlannerApp({ view, initialDate }: PlannerAppProps) {
   }
 
   function movePrevious() {
-    selectDate(view === "month" ? addMonths(state.visibleMonth, -1) : addDays(state.selectedDate, -7));
+    selectDate(
+      view === "month"
+        ? addMonths(state.visibleMonth, -1)
+        : addDays(state.selectedDate, -7)
+    );
   }
 
   function moveNext() {
-    selectDate(view === "month" ? addMonths(state.visibleMonth, 1) : addDays(state.selectedDate, 7));
+    selectDate(
+      view === "month"
+        ? addMonths(state.visibleMonth, 1)
+        : addDays(state.selectedDate, 7)
+    );
   }
 
   function selectToday() {
-    selectDate(todayIso());
+    selectDate(today);
   }
 
   function addTask(draft: TaskDraft) {
@@ -84,23 +104,43 @@ export function PlannerApp({ view, initialDate }: PlannerAppProps) {
           <span>일정과 할 일</span>
         </div>
         <div className="calendar-toolbar" aria-label="캘린더 이동">
-          <button className="secondary-button" type="button" onClick={selectToday}>
+          <button
+            className="secondary-button"
+            type="button"
+            onClick={selectToday}
+          >
             오늘
           </button>
-          <button className="icon-button" type="button" aria-label="이전" onClick={movePrevious}>
+          <button
+            className="icon-button"
+            type="button"
+            aria-label="이전"
+            onClick={movePrevious}
+          >
             {"<"}
           </button>
-          <button className="icon-button" type="button" aria-label="다음" onClick={moveNext}>
+          <button
+            className="icon-button"
+            type="button"
+            aria-label="다음"
+            onClick={moveNext}
+          >
             {">"}
           </button>
           <div className="toolbar-title">{toolbarTitle}</div>
         </div>
         <div className="topbar-actions">
           <div className="segmented view-switch" aria-label="캘린더 보기">
-            <Link className={view === "month" ? "active" : ""} href={routeFor("month", state.selectedDate)}>
+            <Link
+              className={view === "month" ? "active" : ""}
+              href={routeFor("month", state.selectedDate)}
+            >
               월
             </Link>
-            <Link className={view === "week" ? "active" : ""} href={routeFor("week", state.selectedDate)}>
+            <Link
+              className={view === "week" ? "active" : ""}
+              href={routeFor("week", state.selectedDate)}
+            >
               주
             </Link>
           </div>
@@ -117,7 +157,11 @@ export function PlannerApp({ view, initialDate }: PlannerAppProps) {
         <aside className="calendar-sidebar">
           {view === "week" ? (
             <MiniCalendar
-              state={state}
+              visibleMonth={state.visibleMonth}
+              selectedDate={state.selectedDate}
+              today={today}
+              tasks={state.tasks}
+              events={state.events}
               onSelectDate={selectDate}
               onVisibleMonthChange={actions.setVisibleMonth}
             />
@@ -140,10 +184,20 @@ export function PlannerApp({ view, initialDate }: PlannerAppProps) {
         </aside>
 
         {view === "month" ? (
-          <CalendarPanel state={state} onSelectDate={selectDate} />
+          <CalendarPanel
+            visibleMonth={state.visibleMonth}
+            selectedDate={state.selectedDate}
+            today={today}
+            tasks={state.tasks}
+            events={state.events}
+            onSelectDate={selectDate}
+          />
         ) : (
           <WeekTimeline
-            state={state}
+            selectedDate={state.selectedDate}
+            today={today}
+            tasks={state.tasks}
+            events={state.events}
             onSelectDate={selectDate}
             onAddEvent={addEvent}
             onUpdateEvent={updateEvent}
@@ -154,10 +208,26 @@ export function PlannerApp({ view, initialDate }: PlannerAppProps) {
   );
 }
 
+/**
+ * 뷰 타입과 날짜를 기반으로 캘린더 라우트 URL을 생성합니다.
+ *
+ * @param view 캘린더 뷰 타입(`month` | `week`)
+ * @param date 기준 날짜(ISO 형식 `YYYY-MM-DD`)
+ * @returns `/{view}?date={date}` 형식의 라우트 문자열
+ */
 function routeFor(view: CalendarView, date: string): string {
   return `/${view}?date=${date}`;
 }
 
+/**
+ * 라우트/쿼리에서 받은 날짜 문자열의 유효성을 검사합니다.
+ *
+ * - `YYYY-MM-DD` 형식만 허용합니다.
+ * - 달력에 존재하지 않는 날짜(예: `2026-02-30`)는 거부합니다.
+ *
+ * @param value 라우트/쿼리 파라미터에서 받은 원본 날짜 문자열
+ * @returns 유효하면 원본 ISO 날짜 문자열, 아니면 `null`
+ */
 function normalizeDate(value: string | undefined): string | null {
   if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value)) {
     return null;
